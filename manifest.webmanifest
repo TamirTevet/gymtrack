@@ -1,0 +1,10 @@
+{
+  "name": "יומן אימון",
+  "short_name": "יומן אימון",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#15161a",
+  "theme_color": "#15161a",
+  "dir": "rtl",
+  "lang": "he"
+}
