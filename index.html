@@ -204,13 +204,13 @@ const DEFAULT_ROUTINES = {
       {name:'מוט תחתון',sets:4,reps:'8',last:'27.5'},{name:'דרופ פולי',sets:4,reps:'8',last:'30'},
       {name:'פשיטת מרפק פולי מוט',sets:4,reps:'8',last:'30'},{name:'כתף קדמית',sets:4,reps:'12',last:'12.5'}]},
     {id:'back',name:'גב + יד קדמית',ex:[
-      {name:'חתירה במוט',sets:5,reps:'8',last:'107.5'},{name:'פול אובר',sets:4,reps:'8',last:'30'},
-      {name:'משיכה בפולי רחב',sets:4,reps:'12',last:'32.5'},{name:'משיכה בפולי צר',sets:4,reps:'8',last:'35'},
-      {name:'מתח',sets:4,reps:'MAX',last:'0'},{name:'חתירה פולי',sets:4,reps:'12',last:'35'},
-      {name:'כפיפת מרפק מוט דרופ',sets:3,reps:'8',last:'25'},{name:'פטישים H דרופ',sets:3,reps:'8',last:'25'},
-      {name:'כפיפת מרפק דאמבלים',sets:3,reps:'8',last:'22'},{name:'פטישים דאמבלים',sets:3,reps:'8',last:'22'},
-      {name:'כתף אחורית',sets:4,reps:'8',last:'22'},{name:'טרפז מוט',sets:4,reps:'12',last:'115'},
-      {name:'ליפוף ושחרור חבל אמה',sets:4,reps:'X',last:'7'}]},
+      {name:'משיכה בפולי רחב',sets:5,reps:'10',last:'32.5',ss:true},{name:'פול אובר',sets:5,reps:'10',last:'30'},
+      {name:'משיכה בפולי צר',sets:4,reps:'10',last:'35',ss:true},{name:'ליפוף ושחרור חבל אמה',sets:4,reps:'X',last:'7'},
+      {name:'חתירה צר בישיבה בפולי',sets:4,reps:'10',last:'35',ss:true},{name:'מתח',sets:4,reps:'MAX',last:'0'},
+      {name:'חתירה רחב בישיבה בפולי',sets:4,reps:'10',last:'',ss:true},{name:'כתף אחורית',sets:4,reps:'12',last:'22'},
+      {name:'כפיפת מרפק מוט דרופ',sets:3,reps:'8',last:'25',ss:true},{name:'פטישים דאמבלים',sets:3,reps:'8',last:'22'},
+      {name:'כפיפת מרפק מוט H דרופ',sets:3,reps:'8',last:'25',ss:true},{name:'כפיפת מרפק דאמבלים',sets:3,reps:'8',last:'22'},
+      {name:'טרפז מוט (משיכת כתפיים)',sets:4,reps:'12',last:'115'}]},
     {id:'legsh',name:'רגליים + כתפיים',ex:[
       {name:"לאנץ'",sets:5,reps:'12',last:'28'},{name:'סקוואט משקולית',sets:5,reps:'20',last:'58'},
       {name:'פשיטת ברך כסא',sets:5,reps:'8',last:'100'},{name:'כפיפת ברך כסא',sets:5,reps:'8',last:'55'},
@@ -332,6 +332,7 @@ function startSession(env,dayId){
         sets.push({weight:ps?ps.weight:(ex.last||''),reps:'',rir:'',done:false,targetReps:ex.reps});}
       return{name:ex.name,target:`${ex.sets||'-'}×${ex.reps}`,sets,ss:!!ex.ss,open:false};
     })};
+  if(ACTIVE.exercises[0])ACTIVE.exercises[0].open=true;
   saveA(); go({screen:'session'});
 }
 
@@ -342,9 +343,10 @@ function renderSession(app){
     <div class="top"><div class="back" onclick="go({screen:'days',env:'${s.env}'})">›</div>
       <div><h1>${esc(s.dayName)}</h1><div class="sub num">${dn}/${tot} סטים הושלמו</div></div></div>
     ${s.exercises.map((ex,ei)=>{const exDone=ex.sets.length&&ex.sets.every(x=>x.done);
-      return `<div class="ex ${ex.open?'open':''} ${exDone?'done-ex':''} ${ex.ss?'ss':''}">
+      const linked=ex.ss||(ei>0&&s.exercises[ei-1].ss);
+      return `<div class="ex ${ex.open?'open':''} ${exDone?'done-ex':''} ${linked?'ss':''}">
         <div class="ex-head" onclick="toggleEx(${ei})">
-          <div style="flex:1"><div class="name">${esc(ex.name)} ${exDone?'✓':''}${ex.ss?'<span class="ss-badge">סופרסט</span>':''}</div>
+          <div style="flex:1"><div class="name">${esc(ex.name)} ${exDone?'✓':''}${linked?'<span class="ss-badge">סופרסט</span>':''}</div>
           <div class="prog num">יעד ${esc(ex.target)} חזרות</div></div>
           <div class="expand">⌄</div></div>
         <div class="ex-body">
@@ -365,10 +367,20 @@ function renderSession(app){
     <button class="btn stop" onclick="discardSession()">בטל אימון</button>`;
   renderTimer();
 }
-function toggleEx(i){ACTIVE.exercises[i].open=!ACTIVE.exercises[i].open;saveA();render()}
+function toggleEx(i){const was=ACTIVE.exercises[i].open;ACTIVE.exercises.forEach((e,k)=>e.open=(k===i&&!was));saveA();render()}
 function setF(ei,si,f,v){ACTIVE.exercises[ei].sets[si][f]=v;saveA()}
-function toggleSet(ei,si){const st=ACTIVE.exercises[ei].sets[si];st.done=!st.done;saveA();render();
-  if(st.done){startTimer(currentRest);if(navigator.vibrate)navigator.vibrate(15);}}
+function toggleSet(ei,si){const ex=ACTIVE.exercises[ei],st=ex.sets[si];st.done=!st.done;
+  if(st.done){
+    startTimer(currentRest);if(navigator.vibrate)navigator.vibrate(15);
+    if(ex.sets.every(x=>x.done)){                 // exercise complete → advance to next
+      ex.open=false;
+      let nxt=-1;
+      for(let j=ei+1;j<ACTIVE.exercises.length;j++){if(!ACTIVE.exercises[j].sets.every(x=>x.done)){nxt=j;break;}}
+      if(nxt<0)for(let j=0;j<ei;j++){if(!ACTIVE.exercises[j].sets.every(x=>x.done)){nxt=j;break;}}
+      if(nxt>=0)ACTIVE.exercises.forEach((e,k)=>e.open=(k===nxt));
+    }
+  }
+  saveA();render();}
 function addSet(ei){const ex=ACTIVE.exercises[ei],l=ex.sets[ex.sets.length-1]||{};
   ex.sets.push({weight:l.weight||'',reps:'',rir:'',done:false,targetReps:l.targetReps||''});saveA();render()}
 function rmSet(ei){const ex=ACTIVE.exercises[ei];if(ex.sets.length>1){ex.sets.pop();saveA();render()}}
@@ -625,12 +637,14 @@ function copyText(t){if(navigator.clipboard&&navigator.clipboard.writeText)
   function fb(t){const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();
     try{document.execCommand('copy');toast('הועתק! הדבק כאן ב‑Claude');}catch(e){toast('העתק ידנית');}document.body.removeChild(ta);}}
 
-/* ---- timer ---- */
-let currentRest=90,timerLeft=0,timerInt=null,timerRunning=false;
+/* ---- timer (timestamp-based · wake-lock · background-safe) ---- */
+let currentRest=90,timerEnd=0,timerInt=null,timerRunning=false,wakeLock=null,notified=false;
 const PRESETS=[45,60,90,120,180];
+function remaining(){return Math.max(0,Math.round((timerEnd-Date.now())/1000));}
 function renderTimer(){
   const bar=document.getElementById('timerbar');
-  const disp=timerRunning?`${Math.floor(timerLeft/60)}:${String(timerLeft%60).padStart(2,'0')}`:(currentRest+'ש׳');
+  const left=timerRunning?remaining():currentRest;
+  const disp=timerRunning?`${Math.floor(left/60)}:${String(left%60).padStart(2,'0')}`:(currentRest+'ש׳');
   bar.innerHTML=`<div class="timer ${timerRunning?'run':''}">
     <div class="rowt">
       <div class="disp ${timerRunning?'':'idle'} num">${disp}</div>
@@ -645,10 +659,37 @@ function renderTimer(){
 }
 function setRest(s){currentRest=s;renderTimer();}
 function customRest(){const v=parseInt(document.getElementById('ct').value);if(v>0){currentRest=v;renderTimer();toast(v+' שניות מנוחה');}}
-function startTimer(sec){stopTimer();timerLeft=sec;timerRunning=true;renderTimer();
-  timerInt=setInterval(()=>{timerLeft--;if(timerLeft<=0)timerDone();renderTimer();},1000);}
-function stopTimer(){clearInterval(timerInt);timerRunning=false;renderTimer();}
-function timerDone(){clearInterval(timerInt);timerRunning=false;beep();if(navigator.vibrate)navigator.vibrate([120,60,120]);toast('זמן מנוחה נגמר — קדימה');}
+async function requestWake(){try{if('wakeLock'in navigator){wakeLock=await navigator.wakeLock.request('screen');
+  wakeLock.addEventListener('release',()=>{wakeLock=null;});}}catch(e){}}
+function releaseWake(){try{if(wakeLock){wakeLock.release();wakeLock=null;}}catch(e){}}
+function startTimer(sec){
+  stopTimer(true);
+  timerEnd=Date.now()+sec*1000;timerRunning=true;notified=false;
+  if('Notification'in window && Notification.permission==='default'){try{Notification.requestPermission();}catch(e){}}
+  requestWake();
+  renderTimer();
+  timerInt=setInterval(tick,250);
+}
+function tick(){if(!timerRunning)return;if(remaining()<=0){timerDone();}else renderTimer();}
+function stopTimer(silent){clearInterval(timerInt);timerInt=null;timerRunning=false;releaseWake();if(!silent)renderTimer();}
+function timerDone(){
+  if(notified)return;notified=true;
+  clearInterval(timerInt);timerInt=null;timerRunning=false;releaseWake();
+  beep();if(navigator.vibrate)navigator.vibrate([120,60,120]);
+  notify('זמן מנוחה נגמר 💪','קדימה לסט הבא');
+  toast('זמן מנוחה נגמר — קדימה');renderTimer();
+}
+function notify(title,body){try{
+  if('Notification'in window && Notification.permission==='granted'){
+    if(navigator.serviceWorker && navigator.serviceWorker.ready){
+      navigator.serviceWorker.ready.then(reg=>reg.showNotification(title,{body,tag:'rest',renotify:true,vibrate:[120,60,120]})).catch(()=>{try{new Notification(title,{body});}catch(e){}});
+    }else{new Notification(title,{body});}
+  }
+}catch(e){}}
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden||!timerRunning)return;
+  if(remaining()<=0)timerDone(); else{if(!wakeLock)requestWake();renderTimer();}
+});
 function beep(){try{const ac=new (window.AudioContext||window.webkitAudioContext)();const o=ac.createOscillator(),g=ac.createGain();
   o.connect(g);g.connect(ac.destination);o.type='sine';o.frequency.value=880;
   g.gain.setValueAtTime(.001,ac.currentTime);g.gain.exponentialRampToValueAtTime(.4,ac.currentTime+.02);
